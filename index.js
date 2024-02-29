@@ -9,6 +9,13 @@ const jwt = require("jsonwebtoken");
 const secretKey =
   process.env.SECRET_KEY || "gV2$r9^uLpQw3ZtYxYzA#dG!kLmNp3s6v9y/B?E";
 
+// const db = mysql2.createPool({
+//   host: "localhost",
+//   user: "root",
+//   password: "01.God_is_Able",
+//   database: "thesis2_db",
+// });
+
 const db = mysql2.createPool({
   host: "sql.freedb.tech",
   user: "freedb_jhovan",
@@ -25,9 +32,9 @@ db.getConnection((err, connection) => {
   }
 });
 
-app.use(cors());
+// app.use(cors());
 
-app.options("*", cors());
+// app.options("*", cors());
 
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -44,14 +51,14 @@ const transporter = nodemailer.createTransport({
 });
 
 // CORS CONFIGURATION
-// const corsOptions = {
-//   origin: [/https:\/\/th-speak\.vercel\.app($|\/.*)/], // Regex to match the origin and any subpaths
-//   methods: "GET,PUT,POST,DELETE",
-//   allowedHeaders: ["Content-Type", "Authorization"],
-//   credentials: true,
-// };
+const corsOptions = {
+  origin: [/https:\/\/th-speak\.vercel\.app($|\/.*)/], // Regex to match the origin and any subpaths
+  methods: "GET,PUT,POST,DELETE",
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
 
-// app.use(cors(corsOptions));
+app.use(cors(corsOptions));
 
 // Login into user account start
 app.post("/login", (req, res) => {
@@ -1056,13 +1063,12 @@ app.get("/api/computeFinalGrades", async (req, res) => {
 
 //---------- Store Attempt Scores ------------- //
 app.post("/api/storeAttemptScores", (req, res) => {
-  const { studentID, unitNumber, activityNumber, attemptScores } = req.body;
+  const { studentID, unitNumber, activityNumber, attemptScores, title } =
+    req.body;
   const { attempt_1, attempt_2, attempt_3 } = attemptScores;
 
-  // Calculate total score
   const totalScore = attempt_1 + attempt_2 + attempt_3;
 
-  // Check if the act_no and unit_no are already present
   const checkQuery = `
     SELECT * FROM attempt_score WHERE student_id = ? AND unit_no = ? AND act_no = ?
   `;
@@ -1079,15 +1085,15 @@ app.post("/api/storeAttemptScores", (req, res) => {
           message: "Attempt scores already exist for this unit and activity.",
         });
       } else {
-        // Update attempt scores and total score in the database
         const query = `
-          INSERT INTO attempt_score (student_id, unit_no, act_no, attempt_one, attempt_two, attempt_three, total_score)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO attempt_score (student_id, unit_no, act_no, attempt_one, attempt_two, attempt_three, total_score, title)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE
           attempt_one = VALUES(attempt_one),
           attempt_two = VALUES(attempt_two),
           attempt_three = VALUES(attempt_three),
-          total_score = VALUES(total_score)
+          total_score = VALUES(total_score),
+          title = VALUES(title)
         `;
         const values = [
           studentID,
@@ -1097,9 +1103,9 @@ app.post("/api/storeAttemptScores", (req, res) => {
           attempt_2,
           attempt_3,
           totalScore,
+          title,
         ];
 
-        // Execute the query using your established MySQL connection
         db.query(query, values, (error, results) => {
           if (error) {
             console.error("Error storing attempt scores:", error);
@@ -1142,15 +1148,13 @@ app.get("/api/studentTotalScores", async (req, res) => {
   const { studentId } = req.query;
 
   try {
-    // Query to fetch total score, student info, activity number, and unit number from attempt_score for the given student ID
     const query = `
-      SELECT s.id, s.firstName, s.lastName, ascore.total_score, ascore.act_no, ascore.unit_no
+      SELECT s.id, s.firstName, s.lastName, ascore.title, ascore.total_score, ascore.act_no, ascore.unit_no
       FROM student_list s
       LEFT JOIN attempt_score ascore ON s.id = ascore.student_id
       WHERE s.id = ?
     `;
 
-    // Execute the query using your established MySQL connection
     db.query(query, [studentId], (error, results) => {
       if (error) {
         console.error("Error fetching total scores:", error);
@@ -1165,12 +1169,12 @@ app.get("/api/studentTotalScores", async (req, res) => {
           totalScore: result.total_score,
           activityNumber: result.act_no,
           unitNumber: result.unit_no,
+          title: result.title,
         }));
         console.log("Total scores and student info fetched successfully:", {
           totalScores,
           studentInfo,
         });
-        // Send both totalScores and studentInfo in the response
         res.status(200).json({ totalScores, studentInfo });
       }
     });
